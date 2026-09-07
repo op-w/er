@@ -99,7 +99,7 @@ section_done "TPM2"
 
 ## Install
 
-sudo pacman -S --needed --noconfirm tlp thermald
+step "Power packages" sudo pacman -S --needed --noconfirm tlp thermald
 
 
 ## Conflict
@@ -113,7 +113,11 @@ sudo systemctl mask systemd-rfkill.service systemd-rfkill.socket
 
 sudo systemctl enable --now tlp.service
 
-sudo systemctl enable --now thermald.service
+sudo systemctl enable thermald.service
+
+	# enable, not --now
+	# thermald reads real thermal zones, there are none in a VM
+	# starting it there fails and takes the whole stage with it
 
 
 ## Parked
@@ -148,9 +152,9 @@ section_done "zram"
 ## Install
 
 if ! command -v yay >/dev/null; then
-	  sudo pacman -S --needed --noconfirm git base-devel
-	  git clone https://aur.archlinux.org/yay-bin.git /tmp/yay-bin
-	  (cd /tmp/yay-bin && makepkg -si --noconfirm)
+	  step "Build deps" sudo pacman -S --needed --noconfirm git base-devel
+	  step "Clone yay" git clone https://aur.archlinux.org/yay-bin.git /tmp/yay-bin
+	  step "Build yay" bash -c "cd /tmp/yay-bin && makepkg -si --noconfirm"
 fi
 
 
@@ -186,16 +190,27 @@ section_done "yay"
 #    Verify
 
 
+## Wireless
+
+shopt -s nullglob
+WIFI=(/sys/class/net/*/wireless)
+shopt -u nullglob
+
+	# Arch uses predictable names, wlan0 was never going to be there
+	# any interface with a wireless directory counts
+
+
 ## Checks
 
 check "hostname"       test "$(hostnamectl --static)" = "$HOSTNAME"
 check "locale.conf"    test -f /etc/locale.conf
 check "vconsole"       test -f /etc/vconsole.conf
 check "networkmanager" systemctl is-active NetworkManager
-check "tlp"            systemctl is-active tlp
-check "thermald"       systemctl is-active thermald
+check "tlp enabled"    systemctl is-enabled tlp
+check "thermald set"   systemctl is-enabled thermald
+warn  "thermald live"  systemctl is-active thermald
 warn  "yay"            command -v yay
-warn  "wifi firmware"  test -e /sys/class/net/wlan0
+warn  "wifi device"    test "${#WIFI[@]}" -gt 0
 
 verify_done
 
