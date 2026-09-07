@@ -73,6 +73,14 @@ ENCRYPT="${ENCRYPT:-no}"
 	# parked until the internal SSD goes in
 
 
+## Repo
+
+REPO="$(dirname "$(dirname "$(readlink -f "$0")")")"
+
+	# parent of the stage directory
+	# iso/iso.sh gives the tree root
+
+
 ## Overrides
 
 CONFIG="$HOME/.install-config"
@@ -146,6 +154,48 @@ retry() {
         sleep 2
     done
 }
+
+
+## step
+
+step() {
+	local label=$1; shift
+	local t0=$SECONDS
+	echo
+	echo "--> $label"
+	echo
+	"$@"
+	echo
+	echo "--> $label done in $((SECONDS - t0))s"
+	echo
+}
+
+	# banner before, elapsed after
+	# never wrap anything that prompts, the prompt still needs the terminal
+
+
+## slow
+
+slow() {
+	local label=$1; shift
+	local t0=$SECONDS
+	local pid n=0
+	echo
+	echo "--> $label"
+	"$@" &
+	pid=$!
+	while kill -0 "$pid" 2>/dev/null; do
+		sleep 5
+		n=$((n + 5))
+		echo "    $label ${n}s"
+	done
+	wait "$pid"
+	echo "--> $label done in $((SECONDS - t0))s"
+	echo
+}
+
+	# heartbeat every 5s for commands that print nothing at all
+	# backgrounded, so this one is only for silent non interactive work
 
 
 ## wait_for
