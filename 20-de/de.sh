@@ -30,7 +30,7 @@ PCI="$(lspci)"
 ## Driver
 
 if grep -qi 'VGA.*Intel' <<< "$PCI"; then
-	sudo pacman -S --needed --noconfirm mesa vulkan-intel intel-media-driver libva-utils
+	step "Intel drivers" sudo pacman -S --needed --noconfirm mesa vulkan-intel intel-media-driver libva-utils
 fi
 
 
@@ -49,13 +49,13 @@ section_done "Intel"
 
 ## Deps
 
-sudo pacman -S --needed --noconfirm luarocks gobject-introspection
+step "HyDE deps" sudo pacman -S --needed --noconfirm luarocks gobject-introspection
     # both discovered missing mid-install last time - pre-installed now
 
 
 ## Clone
 
-git clone --depth 1 https://github.com/HyDE-Project/HyDE ~/HyDE
+step "HyDE clone" git clone --depth 1 https://github.com/HyDE-Project/HyDE ~/HyDE
 
 cd ~/HyDE/Scripts
 
