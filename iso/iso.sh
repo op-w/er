@@ -158,7 +158,8 @@ fi
 ## Format
 
 mkfs.fat -F32 "$SYS_ESP"
-mkfs.btrfs -L system "$ROOT_DEV"
+
+step "Format root" mkfs.btrfs -L system "$ROOT_DEV"
 
 
 ## Subvols
@@ -206,25 +207,28 @@ section_done "Partitions"
 
 ## Mirrors
 
-retry reflector --latest 10 --protocol https --age 12 --sort rate --save /etc/pacman.d/mirrorlist
+slow "Mirrors" reflector --latest 10 --protocol https --age 12 --sort rate --save /etc/pacman.d/mirrorlist
+
+	# reflector rate tests mirrors and prints nothing while it does
+	# slow gives it a heartbeat so it does not look hung
 
 
 ## Pacstrap
 
-pacstrap -K /mnt base linux linux-firmware intel-ucode
+step "Kernel and firmware" pacstrap -K /mnt base linux linux-firmware intel-ucode
 
-pacstrap -K /mnt btrfs-progs sudo base-devel git
+step "Filesystem and build tools" pacstrap -K /mnt btrfs-progs sudo base-devel git
 
-pacstrap -K /mnt networkmanager wpa_supplicant iwd
+step "Network" pacstrap -K /mnt networkmanager wpa_supplicant iwd
 
-pacstrap -K /mnt zram-generator snapper snap-pac
+step "Snapshots and zram" pacstrap -K /mnt zram-generator snapper snap-pac
 
-pacstrap -K /mnt limine efibootmgr dosfstools mtools
+step "Bootloader" pacstrap -K /mnt limine efibootmgr dosfstools mtools
 
-pacstrap -K /mnt nano bash-completion openssh gobject-introspection
+step "Shell tools" pacstrap -K /mnt nano bash-completion openssh gobject-introspection
 
 if [[ "$ENCRYPT" == yes ]]; then
-	pacstrap -K /mnt cryptsetup tpm2-tools
+	step "Encryption tools" pacstrap -K /mnt cryptsetup tpm2-tools
 fi
 
 
@@ -270,7 +274,7 @@ fi
 
 arch-chroot /mnt sed -i "s/^HOOKS=.*/HOOKS=($HOOKLIST)/" /etc/mkinitcpio.conf
 
-arch-chroot /mnt mkinitcpio -P
+step "Initramfs" arch-chroot /mnt mkinitcpio -P
 
 
 ## Network
@@ -376,10 +380,22 @@ section_done "Bootloader"
 
 ## Logs
 
+clear
+
 cp /var/log/install/iso.log /mnt/var/log/
 
 cp "$CONFIG" /mnt/home/"$USERNAME"/.install-config
 	sudo chown 1000:1000 /mnt/home/"$USERNAME"/.install-config
+
+
+## Repo
+
+step "Copy repo" cp -a "$REPO" /mnt/home/"$USERNAME"/
+
+chown -R 1000:1000 /mnt/home/"$USERNAME"/"$(basename "$REPO")"
+
+	# .git comes with it, so the installed system can pull and push
+	# no second clone after the reboot
 
 
 ## Unmount
@@ -389,11 +405,13 @@ umount -R /mnt
 lsblk
 
 echo
+echo ============================
 echo "Reboot"
-echo
+echo 
 echo "Pull the install stick, leave the SSD in"
 echo
 echo "Run bs.sh after"
+echo ============================
 echo
 
 
