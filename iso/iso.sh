@@ -117,11 +117,21 @@ else
 	ROOT_LABEL="system"
 fi
 
-sgdisk --zap-all "$SYSTEM_DISK"
+sgdisk --zap-all "$SYSTEM_DISK" || true
+
+partprobe "$SYSTEM_DISK" || true
+udevadm settle
+
+	# zap reports the damage it found, including damage it just fixed
+	# partprobe then reads a disk with no label at all and calls that an error
+	# neither is a failure here, the guard is the print below
+
 sgdisk -n1:0:+4G -t1:EF00 -c1:"EFI"          "$SYSTEM_DISK"
 sgdisk -n2:0:0   -t2:8300 -c2:"$ROOT_LABEL"  "$SYSTEM_DISK"
 
 partprobe "$SYSTEM_DISK"
+
+sgdisk --print "$SYSTEM_DISK" > /dev/null
 
 
 ## Names
@@ -133,6 +143,9 @@ udevadm settle
 
 wait_for 10 test -b "$SYS_ESP"
 wait_for 10 test -b "$SYS_ROOT"
+
+wipefs -af "$SYS_ESP"
+wipefs -af "$SYS_ROOT"
 
 
 ## Encrypt
@@ -260,6 +273,9 @@ arch-chroot /mnt sed -i \
   's/^MODULES=.*/MODULES=(xhci_pci usb_storage uas nvme)/' \
   /etc/mkinitcpio.conf
 
+arch-chroot /mnt grep -q '^MODULES=(xhci_pci usb_storage uas nvme)$' /etc/mkinitcpio.conf
+
+	# sed exits 0 when it matches nothing, so the sed alone proves nothing
 	# autodetect trims to hardware seen at build time
 	# forcing usb here is what lets an external root be found at boot
 
@@ -273,6 +289,8 @@ else
 fi
 
 arch-chroot /mnt sed -i "s/^HOOKS=.*/HOOKS=($HOOKLIST)/" /etc/mkinitcpio.conf
+
+arch-chroot /mnt grep -q "^HOOKS=($HOOKLIST)$" /etc/mkinitcpio.conf
 
 step "Initramfs" arch-chroot /mnt mkinitcpio -P
 
@@ -317,6 +335,10 @@ clear
 ## Sudo
 
 arch-chroot /mnt sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
+
+arch-chroot /mnt grep -q '^%wheel ALL=(ALL:ALL) ALL$' /etc/sudoers
+
+	# no sudo means bs.sh cannot run at all, and sed would not have said so
 
 
 section_done "Users"
@@ -371,6 +393,23 @@ arch-chroot /mnt bash /root/_setup.sh
 rm /mnt/root/_setup.sh
 
 
+## Verify
+
+check "fallback efi"  test -s /mnt/boot/EFI/BOOT/BOOTX64.EFI
+check "limine efi"    test -s /mnt/boot/EFI/limine/limine_x64.efi
+check "limine.conf"   test -s /mnt/boot/limine.conf
+check "kernel"        test -s /mnt/boot/vmlinuz-linux
+check "initramfs"     test -s /mnt/boot/initramfs-linux.img
+check "microcode"     test -s /mnt/boot/intel-ucode.img
+check "fstab"         test -s /mnt/etc/fstab
+check "root uuid"     grep -qE "root=UUID=[0-9a-f-]{36}" /mnt/boot/limine.conf
+
+verify_done
+
+	# last point where a mistake is cheap
+	# after the unmount it costs a reinstall to find out
+
+
 section_done "Bootloader"
 
 
@@ -407,7 +446,7 @@ lsblk
 echo
 echo ============================
 echo "Reboot"
-echo 
+echo
 echo "Pull the install stick, leave the SSD in"
 echo
 echo "Run bs.sh after"
